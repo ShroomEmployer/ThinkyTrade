@@ -26,29 +26,71 @@ def adaptive_strategy(
     if intervals_left <= 1:
         return remaining
 
-    # Amount we need to trade on average
+    # ------------------------------------------
+    # BASELINE
+    # ------------------------------------------
+
     base_quantity = remaining / intervals_left
 
-    # More liquidity = we can trade more
+    # ------------------------------------------
+    # MARKET CONDITIONS
+    # ------------------------------------------
+
     liquidity_ratio = liquidity / max(volume, 1)
 
-    # Wider spread = more expensive to trade
-    spread_penalty = 1 / (1 + spread * 10)
+    spread_score = 1 / (1 + spread * 20)
 
-    # Higher volatility = more risky to trade
-    volatility_penalty = 1 / (1 + volatility)
+    volatility_score = 1 / (1 + volatility)
 
-    # Deadline pressure
-    urgency = 1 + (1 / intervals_left)
-
-    quantity = (
-        base_quantity
-        * (0.5 + liquidity_ratio)
-        * spread_penalty
-        * volatility_penalty
-        * urgency
+    market_quality = (
+        0.5 * liquidity_ratio
+        + 0.3 * spread_score
+        + 0.2 * volatility_score
     )
 
+    # ------------------------------------------
+    # PARTICIPATION LIMIT
+    # ------------------------------------------
+
+    # Don't consume too much available liquidity.
+    #
+    # This is the key difference from our
+    # previous strategy.
+
+    max_participation = 0.10
+
+    liquidity_limit = liquidity * max_participation
+
+    # ------------------------------------------
+    # ADAPTIVE SIZE
+    # ------------------------------------------
+
+    # Market quality adjusts our normal pace,
+    # but only modestly.
+
+    multiplier = 0.85 + 0.30 * market_quality
+
+    desired_quantity = base_quantity * multiplier
+
+    # Never exceed our liquidity participation limit.
+    quantity = min(
+        desired_quantity,
+        liquidity_limit
+    )
+
+    # ------------------------------------------
+    # DEADLINE PROTECTION
+    # ------------------------------------------
+
+    # Near the end, prioritize completion.
+
+    if intervals_left <= 5:
+        quantity = max(
+            quantity,
+            remaining / intervals_left
+        )
+
+    # Never trade more than remaining.
     quantity = min(quantity, remaining)
 
     return quantity
